@@ -1,34 +1,30 @@
-// This demo demonstrates simple cubemap reflections and more complex planar reflections
-
 import PicoGL from "../node_modules/picogl/build/module/picogl.js";
 import {mat4, vec3, mat3, vec4, vec2} from "../node_modules/gl-matrix/esm/index.js";
 
 import {positions, normals, indices} from "../blender/Glock182.js"
 import {positions as planePositions, uvs as planeUvs, indices as planeIndices} from "../blender/plane.js"
 
-// language=GLSL
+
 let fragmentShader = `
-    #version 300 es
-    precision highp float;
-    
-    uniform samplerCube cubemap;    
-        
-    in vec3 vNormal;
-    in vec3 viewDir;
-    
-    out vec4 outColor;
-    
-    void main()
-    {        
-        vec3 reflectedDir = reflect(viewDir, normalize(vNormal));
-        outColor = texture(cubemap, reflectedDir);
-        
-        // Try using a higher mipmap LOD to get a rough material effect without any performance impact
-        // outColor = textureLod(cubemap, reflectedDir, 7.0);
-    }
+#version 300 es
+precision highp float;
+
+uniform samplerCube cubemap;
+uniform vec4 objectColor; // Add this line
+
+in vec3 vNormal;
+in vec3 viewDir;
+
+out vec4 outColor;
+
+void main() {
+    vec3 reflectedDir = reflect(viewDir, normalize(vNormal));
+    vec4 envColor = texture(cubemap, reflectedDir);
+    outColor = envColor * objectColor; // Modify this line
+}
 `;
 
-// language=GLSL
+
 let vertexShader = `
     #version 300 es
             
@@ -54,7 +50,6 @@ let vertexShader = `
     }
 `;
 
-// language=GLSL
 let mirrorFragmentShader = `
     #version 300 es
     precision highp float;
@@ -77,7 +72,6 @@ let mirrorFragmentShader = `
     }
 `;
 
-// language=GLSL
 let mirrorVertexShader = `
     #version 300 es
             
@@ -97,7 +91,6 @@ let mirrorVertexShader = `
     }
 `;
 
-// language=GLSL
 let skyboxFragmentShader = `
     #version 300 es
     precision mediump float;
@@ -115,7 +108,6 @@ let skyboxFragmentShader = `
     }
 `;
 
-// language=GLSL
 let skyboxVertexShader = `
     #version 300 es
     
@@ -150,7 +142,6 @@ let mirrorArray = app.createVertexArray()
     .vertexAttributeBuffer(1, planeUvsBuffer)
     .indexBuffer(planeIndicesBuffer);
 
-// Change the reflection texture resolution to checkout the difference
 let reflectionResolutionFactor = 0.2;
 let reflectionColorTarget = app.createTexture2D(app.width * reflectionResolutionFactor, app.height * reflectionResolutionFactor, {magFilter: PicoGL.LINEAR});
 let reflectionDepthTarget = app.createTexture2D(app.width * reflectionResolutionFactor, app.height * reflectionResolutionFactor, {internalFormat: PicoGL.DEPTH_COMPONENT16});
@@ -213,6 +204,7 @@ const cubemap = app.createCubemap({
 
 let drawCall = app.createDrawCall(program, vertexArray)
     .texture("cubemap", cubemap);
+    drawCall.uniform("objectColor", [0.5, 0.0, 0.5, 1.0]); // Example: Setting to red
 
 let skyboxDrawCall = app.createDrawCall(skyboxProgram, skyboxArray)
     .texture("cubemap", cubemap);
@@ -220,6 +212,7 @@ let skyboxDrawCall = app.createDrawCall(skyboxProgram, skyboxArray)
 let mirrorDrawCall = app.createDrawCall(mirrorProgram, mirrorArray)
     .texture("reflectionTex", reflectionColorTarget)
     .texture("distortionMap", app.createTexture2D(await loadTexture("noise.png")));
+    
 
 function renderReflectionTexture()
 {
@@ -277,19 +270,18 @@ function draw(timems) {
     vec3.rotateY(cameraPosition, vec3.fromValues(0, 1, 3.4), vec3.fromValues(0, 0, 0), time * 0.05);
     mat4.lookAt(viewMatrix, cameraPosition, vec3.fromValues(0, -0.5, 0), vec3.fromValues(0, 1, 0));
 
-    // Reset modelMatrix to identity for a fresh start
+
     mat4.identity(modelMatrix);
 
-    // Apply rotation transformations
+   
     mat4.fromXRotation(rotateXMatrix, time * 0.1136 - Math.PI / 2);
     mat4.fromZRotation(rotateYMatrix, time * 0.2235);
     mat4.mul(modelMatrix, rotateXMatrix, rotateYMatrix);
 
-    // Apply scaling transformation to scale down the model
-    // Adjust the vec3.fromValues to scale differently if needed
-    mat4.scale(modelMatrix, modelMatrix, vec3.fromValues(0.12, 0.12, 0.12)); // Scale down by half
+   
+    mat4.scale(modelMatrix, modelMatrix, vec3.fromValues(0.1, 0.12, 0.12)); 
 
-    // Prepare mirror model matrix for reflection
+
     mat4.fromXRotation(rotateXMatrix, 0.3);
     mat4.fromYRotation(rotateYMatrix, time * 0.2354);
     mat4.mul(mirrorModelMatrix, rotateYMatrix, rotateXMatrix);
